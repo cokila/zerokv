@@ -2,6 +2,8 @@
 
 A sub-200ns, lock-free, shared-nothing embedded Key-Value storage engine in Rust. Designed specifically to eliminate CPU/Bus bottlenecks in high-throughput data paths, such as LLM KV Cache swapping, MoE routing coordination, and systems computing.
 
+> 📣 **The pitch / Show HN write-up:** [ANNOUNCEMENT.md](ANNOUNCEMENT.md) — why this matters for LLM inference infrastructure.
+
 ### 📊 Verified Performance (16 Cores / 2M Keys)
 * **Direct ShardedIndex READ (Zero-Copy):** ~207 ns/op
 * **MeshService PUT (Client-Routed):** ~231 ns/op (4.8 Mops/s)
