@@ -1,16 +1,38 @@
 # zerokv
 
-A **sub-millisecond, garbage-collector-free, lock-free** key-value storage
-engine written in Rust, built as a deep exploration of the language's most
-advanced systems-programming features. The design goal is *predictable* latency
-under concurrent load: no GC pauses, no blocking locks on the data path, and the
-minimum number of memory barriers required for correctness.
+A sub-200ns, lock-free, shared-nothing embedded Key-Value storage engine in Rust. Designed specifically to eliminate CPU/Bus bottlenecks in high-throughput data paths, such as LLM KV Cache swapping, MoE routing coordination, and systems computing.
+
+### 📊 Verified Performance (16 Cores / 2M Keys)
+* **Direct ShardedIndex READ (Zero-Copy):** ~207 ns/op
+* **MeshService PUT (Client-Routed):** ~231 ns/op (4.8 Mops/s)
+* **MeshService GET (Client-Routed):** ~344 ns/op
+* **Tail Latency (p99.9):** 746 ns (solid sub-microsecond, cache-resident hot set)
+
+> Measured on a 32-core machine (16 worker threads). Throughput on the full 2M-key
+> set is RAM-latency bound (working set ≫ cache); the p99.9 figure is from the
+> cache-resident hot path. Reproduce with `cargo run --release --bin zerokv -- 16 125000`.
 
 ```
-cargo test            # 9 integration tests (incl. concurrent EBR stress)
-cargo bench           # throughput / latency probe (custom harness)
+cargo test                   # 16 integration tests (incl. concurrent EBR + mesh stress)
+cargo run --release --bin zerokv   # functional demo + benchmarks
 cargo clippy --all-targets   # clean
 ```
+
+---
+
+## ⚖️ License & Dual-Licensing Strategy
+
+This software is licensed under the **GNU Affero General Public License v3 (AGPLv3)**.
+
+### Why AGPLv3?
+`zerokv` addresses live, critical bottlenecks in modern AI infrastructure and distributed systems. To ensure the author's work is protected and not exploited for closed-source commercial gain by cloud providers or AI companies:
+
+1. **Open Source & Research:** You are free to use, modify, and distribute this engine in any open-source project, academic research, or non-commercial environment, provided that **your entire software stack interacting with zerokv is also open-sourced under the AGPLv3**.
+2. **Commercial & Closed-Source Production:** If you intend to use `zerokv` inside proprietary backends, SaaS platforms, corporate infrastructure, or closed-source commercial products without disclosing your application's source code, **you are legally restricted from using the AGPLv3 version**.
+
+**You must acquire a Commercial License.**
+
+To discuss proprietary licensing options or custom integration (e.g., a C-ABI bridge for `llama.cpp`, vLLM, or other inference engines), please contact the author: **gerardo.mancini@gmail.com**.
 
 ## Why these choices
 
@@ -82,9 +104,6 @@ crates/
 
 ## License
 
-Copyright © 2026 gerardo.
-
-`zerokv` is free software, licensed under the **GNU Affero General Public License
-v3.0 or later (AGPL-3.0-or-later)**. See [LICENSE](LICENSE). In particular, if you
-run a modified version to provide a network service, the AGPL requires you to
-offer the corresponding source to its users.
+Copyright © 2026 gerardo. Licensed under **AGPL-3.0-or-later** — see
+[LICENSE](LICENSE) and the [dual-licensing strategy](#️-license--dual-licensing-strategy)
+above. For proprietary/commercial use, contact **gerardo.mancini@gmail.com**.
