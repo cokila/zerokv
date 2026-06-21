@@ -1,0 +1,20 @@
+[package]
+name = "zerokv"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Sub-millisecond, GC-free, lock-free key-value storage engine"
+
+[dependencies]
+core_affinity = "0.8.3"
+zerokv-derive = { path = "../zerokv-derive" }
+
+[features]
+default = []
+
+[[bench]]
+name = "throughput"
+harness = false
+required-features = []

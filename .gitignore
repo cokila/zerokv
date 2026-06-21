@@ -1,0 +1,15 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+
+# Cargo lock is kept for the binary/workspace (reproducible builds)
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# zerokv scratch files (WAL / temp test artifacts)
+*.wal
+zerokv_*.log

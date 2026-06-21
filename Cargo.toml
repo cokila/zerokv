@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["crates/zerokv", "crates/zerokv-derive"]
+
+[workspace.package]
+edition = "2021"
+license = "AGPL-3.0-or-later"
+authors = ["gerardo <gerardo.mancini@gmail.com>"]
+repository = "https://github.com/cokila/zerokv"
+
+# Release profile tuned for a sub-millisecond, low-jitter data path.
+# - `panic = "abort"`  : no unwinding tables on the hot path, smaller code, no
+#                        landing pads that the optimizer must keep alive.
+# - `codegen-units = 1`: maximal cross-function inlining for the index hot loop.
+# - `lto = "fat"`      : let LLVM inline across crate boundaries (skiplist <-> arena).
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = false
