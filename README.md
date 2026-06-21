@@ -22,6 +22,56 @@ cargo clippy --all-targets   # clean
 
 ---
 
+## 🧠 Design Concept: a deterministic coordination layer for MoE expert paging
+
+> **This is a research direction / design concept, not a benchmarked end-to-end
+> result.** The numbers above are the engine's measured primitives; the claims
+> below describe what `zerokv` is *built to enable* as an indexing/coordination
+> layer, with the honest physics spelled out.
+
+Running large Mixture-of-Experts (MoE) models on consumer GPUs (e.g. a single
+12 GB card) forces offloading: only a few experts are active per token, but the
+full parameter set must live *somewhere*. Today that "somewhere" is the OS page
+cache or a KV/DB lookup, whose **lookup + coordination jitter** stacks on top of
+the unavoidable transfer.
+
+`zerokv` targets the *coordination* half of that cost — not the physics of the
+transfer:
+
+```
+TRADITIONAL OFFLOAD (jittery):
+  Router selects expert ─► page-cache / DB lookup (µs–ms, lock + alloc jitter)
+                          ─► PCIe transfer ─► GPU stalls on the variance
+
+WITH ZEROKV AS THE INDEX (deterministic):
+  Router selects expert ─► zerokv index resolves location in ~213 ns (flat p99.9)
+                          ─► PCIe transfer (still bandwidth-bound)
+                          ─► GPU sees a *predictable* arrival time
+```
+
+**What zerokv actually changes:**
+
+- **Minimal lookup overhead.** The expert's storage location is resolved by the
+  lock-free index in ~213 ns, versus the microseconds a contended map / DB query
+  can cost — removing the *coordination* latency from the critical path.
+- **Deterministic tails (the real win).** Epoch-Based Reclamation means no wild
+  reallocations and no cross-core atomic stalls, so the *lookup + dispatch* time
+  is flat at p99.9. The transfer cadence stops being jittered by the software
+  layer; micro-stutter from coordination variance disappears.
+- **GC-free, pre-allocated staging.** Cold experts live in zerokv's fixed arena
+  (system RAM or NVMe); there is no allocator churn when an expert is paged in.
+
+**What zerokv does *not* change (the honest physics):** moving an expert's
+weights (tens–hundreds of MB) across PCIe is **bandwidth-bound** — milliseconds,
+not nanoseconds — and `zerokv` does not speed that up. The 213 ns is the
+*index/coordination* cost, not the data delivery. `zerokv`'s contribution is
+making that delivery **predictable and coordination-free**, not faster in raw
+bandwidth. Pairing it with `O_DIRECT`/`io_uring` (the wired-but-portable seam in
+[`regbuf`](crates/zerokv/src/regbuf.rs)) keeps the transfer itself off the page
+cache; that is future work, not a measured result.
+
+---
+
 ## ⚖️ License & Dual-Licensing Strategy
 
 This software is licensed under the **GNU Affero General Public License v3 (AGPLv3)**.
