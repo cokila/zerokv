@@ -70,6 +70,39 @@ bandwidth. Pairing it with `O_DIRECT`/`io_uring` (the wired-but-portable seam in
 [`regbuf`](crates/zerokv/src/regbuf.rs)) keeps the transfer itself off the page
 cache; that is future work, not a measured result.
 
+### 🔬 Honest scope: where an expert-pager actually helps (measured)
+
+We ran the real >RAM experiment: **Qwen3-235B-A22B (a 235B MoE, 112 GB Q3)** on a
+**12 GB RTX 4070 SUPER + 64 GB RAM**, experts paged from NVMe via `mmap`. It
+*works* — a model far larger than RAM runs today — at ~1.4 tok/s. We then
+decomposed the per-token time with a cold-vs-warm test (regenerate identical
+text at `temp=0`: the second pass hits experts already in the page cache, so the
+gap is the disk-read cost):
+
+| Phase | Cold (experts from NVMe) | Warm (experts in RAM) | Disk-bound fraction |
+|-------|--------------------------|-----------------------|---------------------|
+| **Decode** (per-token gen) | 1.43 tok/s (699 ms/tok) | 2.22 tok/s (451 ms/tok) | **~35%** |
+| **Prefill** (prompt / TTFT) | 0.87 tok/s | 4.49 tok/s | **~80% (5.2×)** |
+
+**The honest conclusion — these are opposite regimes:**
+
+- **Token generation (decode) is COMPUTE-bound**, not disk-bound. ~65% of the
+  per-token time is the CPU matmul of the active experts (they run on CPU under
+  `--cpu-moe`), which `zerokv` **cannot** speed up — it is a storage layer, not a
+  compute accelerator. A *perfect* expert-prefetcher that hides all disk latency
+  behind compute caps out at ~**1.5×** here. Not worth a deep ggml integration.
+
+- **Prompt processing (prefill / TTFT) is DISK-bound** — warm is **5.2×** faster.
+  Prefill touches many experts in parallel, so it is dominated by NVMe reads.
+  **This is where a zerokv expert-pager (O_DIRECT + io_uring + router-driven
+  prefetch) could realistically pay off** — up to ~5× on time-to-first-token when
+  resuming long contexts. This matches the TTFT framing above; the "fluid
+  generation" claim does **not** survive measurement, the TTFT one does.
+
+So: `zerokv` as an expert-pager is a **TTFT/prefill** optimization, not a decode
+throughput one. The decode bottleneck is CPU expert compute, which is out of
+scope for a storage engine. Measured, not assumed.
+
 ---
 
 ## 🔌 Integration benchmark: llama.cpp KV-cache swap (A/B)
