@@ -72,6 +72,39 @@ cache; that is future work, not a measured result.
 
 ---
 
+## 🔌 Integration benchmark: llama.cpp KV-cache swap (A/B)
+
+`zerokv` was wired into a llama.cpp fork as a switchable KV-blob backend (via a
+C-ABI bridge) and A/B-tested against the two realistic alternatives: the actual
+**disk swap** path llama uses (`state_seq_save`, one file per blob) and an
+**in-RAM `std::unordered_map`**. Same workload, 8 threads, MSVC release.
+
+Gain = `(baseline − zerokv) / baseline` (positive % = zerokv faster);
+multiplier = `baseline / zerokv`.
+
+**4 KB blobs (lookup-heavy path):**
+
+| Baseline                  | PUT gain          | GET gain          |
+|---------------------------|-------------------|-------------------|
+| disk swap (file per blob) | **−99.8%** (525×) | **−97.9%** (48×)  |
+| in-RAM hash map           | **−44.3%** (1.8×) | **−67.9%** (3.1×) |
+
+**64 KB blobs (bulk-copy path):**
+
+| Baseline                  | PUT gain          | GET gain         |
+|---------------------------|-------------------|------------------|
+| disk swap (file per blob) | **−95.3%** (21×)  | **−9.3%** (1.1×) |
+| in-RAM hash map           | +46.6% (slower)   | +193% (slower)   |
+
+**Honest bottom line:** against the real disk-swap path (llama.cpp's actual
+KV-cache behavior) `zerokv` cuts latency **95–99.8%**. Against an in-RAM hash map
+it wins **44–68%** on small, lookup-heavy values, but is **not competitive on
+≥64 KB blobs**, where the work is raw `memcpy` and the FFI + epoch-pin overhead
+shows. Use it where the value is *many small, lookup-heavy entries* or where the
+alternative is the filesystem — not for bulk-copying single large tensors.
+
+---
+
 ## ⚖️ License & Dual-Licensing Strategy
 
 This software is licensed under the **GNU Affero General Public License v3 (AGPLv3)**.
